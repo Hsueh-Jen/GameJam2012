@@ -6,8 +6,8 @@
 當時做出來真的很不好玩，所以想要復刻一下當年的糞作，試著查出不好玩的原因。
 復刻版本使用 Google Antigravity 實作，大概花了4~5個小時完成。(製作時間：2026/3/15 10:30pm ~ 2026/3/16 2:30am)
 
-* 當年作品：https://www.youtube.com/watch?v=1O5LHJAc44Y
-* 復刻遊戲連結：
+* 當年作品影片：https://www.youtube.com/watch?v=1O5LHJAc44Y
+* 復刻遊戲連結：https://hsueh-jen.github.io/GameJam2012/
 * 復刻版本製作過程：https://youtu.be/E8lN5SR0Pl4
 
 ## 遊戲核心 (Core Mechanics)
