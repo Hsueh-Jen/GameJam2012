@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jizo Runner (太陽升起之前)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #111;
+            font-family: '微軟正黑體', 'Microsoft JhengHei', sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 450px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            border: 4px solid #333;
+            border-radius: 10px;
+            background-color: #0b1d3a;
+            /* Night sky base */
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* UI Layer */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #top-bar {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            color: white;
+            text-shadow: 1px 1px 3px black;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        #timer-container {
+            width: 300px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #timer-bar {
+            height: 100%;
+            width: 100%;
+            background: linear-gradient(90deg, #f1c40f, #e67e22, #e74c3c);
+            transform-origin: left;
+        }
+
+        #timer-text {
+            position: absolute;
+            top: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 16px;
+        }
+
+        #inventory-box {
+            display: none;
+        }
+
+        #inventory-label {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            font-size: 14px;
+            color: #ccc;
+            white-space: nowrap;
+        }
+
+        /* Screens */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            pointer-events: auto;
+        }
+
+        #game-over-screen {
+            background: transparent;
+            /* Changed: Transparent background to show canvas fireworks */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #game-over-screen .result-text {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 30px;
+            border-radius: 30px;
+            font-size: 28px;
+            color: white;
+            position: absolute;
+            top: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #game-over-screen .result-text b {
+            color: #f1c40f;
+            font-size: 38px;
+        }
+
+        #game-over-screen .btn {
+            background: #e67e22;
+            box-shadow: 0 4px 0 #d35400;
+            margin-top: 350px;
+            transform: scale(1.2);
+            /* Make it a bit bigger since it is solo in the middle */
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            margin-bottom: 5px;
+            color: #f1c40f;
+            text-shadow: 2px 2px 0 #d35400;
+            font-size: 42px;
+        }
+
+        p {
+            font-size: 18px;
+            margin: 5px 0;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        .controls-info {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .key {
+            display: inline-block;
+            background: #eee;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border-bottom: 2px solid #aaa;
+            font-weight: bold;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            font-size: 24px;
+            font-weight: bold;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #c0392b;
+            transition: 0.1s;
+            margin-top: 10px;
+        }
+
+        .btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #c0392b;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+        <div id="ui-layer" class="hidden">
+            <div id="top-bar">
+                <div></div>
+                <div id="timer-container">
+                    <div id="timer-bar"></div>
+                    <div id="timer-text">日出倒數</div>
+                </div>
+            </div>
+            <div id="inventory-box">
+                <div id="inventory-label">當前持有</div>
+                <span id="inventory-icon"></span>
+            </div>
+        </div>
+
+        <!-- Start Menu -->
+        <div id="start-screen" class="screen">
+            <h1>Jizo Runner</h1>
+            <h2>太陽升起前的小菩薩使者</h2>
+
+            <div class="controls-info">
+                <p>在夜晚的街道上前進，收集道具並交給路邊的地藏小菩薩。</p>
+                <p>小菩薩拿到想要的道具後，會化為人形跟隨你！</p>
+                <p>時間到（天亮時），身後的跟隨者數量就是你的分數。</p>
+                <br>
+                <p><span class="key">←</span> <span class="key">→</span> 左右移動，主角會自動奔跑</p>
+                <p><span class="key">↑</span> 或 <span class="key">W</span> 跳躍</p>
+                <p><span class="key">↓</span> 或 <span class="key">S</span> 撿起地上的炸彈</p>
+                <p>※ 空中的蘋果和氣球，跳起來碰到就會自動收集！</p>
+                <p>※ 靠近小菩薩且持有正確道具時，會<b>自動</b>交付！</p>
+            </div>
+
+            <button class="btn" id="btn-start">開始奔跑</button>
+        </div>
+
+        <!-- Game Over Menu -->
+        <div id="game-over-screen" class="screen hidden">
+            <div class="result-text">
+                天亮了！你成功幫助了 <b><span id="final-score">0</span></b> 位小菩薩迎向早晨！
+            </div>
+            <button class="btn" id="btn-restart">再跑一次</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Image Assets ---
+        const IMG_PATHS = {
+            player01: 'assets/player01.png',
+            player02: 'assets/player02.png',
+            bendover01: 'assets/bendover01.png',
+            bendover02: 'assets/bendover02.png',
+            bg: 'assets/bg.png',
+            tree: 'assets/tree.png',
+            jizo: 'assets/jizo.png',
+            bomb: 'assets/bomb.png',
+            apple: 'assets/apple.png',
+            balloon: 'assets/ballon.png',
+            angel: 'assets/angel.png',
+            ending: 'assets/ending.png',
+            bgtree01: 'assets/bgtree01.png',
+            bgtree02: 'assets/bgtree02.png',
+            bgtree03: 'assets/bgtree03.png'
+        };
+        const images = {};
+        let imagesLoaded = 0;
+        let totalImages = Object.keys(IMG_PATHS).length;
+
+        for (let key in IMG_PATHS) {
+            images[key] = new Image();
+            images[key].onload = () => { imagesLoaded++; };
+            images[key].onerror = () => { console.warn("Failed to load image: " + IMG_PATHS[key]); imagesLoaded++; };
+            images[key].src = IMG_PATHS[key];
+        }
+
+        // --- Configuration & Constants ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // --- Sound Manager (Procedural Audio) ---
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioCtx();
+
+        const sounds = {
+            pickup: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine'; // Sine is cleaner
+                osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.15); // Faster ramp
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            },
+            deliver: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            },
+            fireworkLaunch: () => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.5);
+            },
+            fireworkExplode: () => {
+                const noise = audioCtx.createBufferSource();
+                const bufferSize = audioCtx.sampleRate * 0.5;
+                const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                noise.buffer = buffer;
+
+                const filter = audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(1000, audioCtx.currentTime);
+                filter.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.4);
+
+                const gain = audioCtx.createGain();
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(audioCtx.destination);
+                noise.start();
+            },
+            bgmAudio: (() => {
+                const audio = new Audio('assets/bgm.mp3');
+                audio.volume = 0.15;
+                return audio;
+            })(),
+            startBGM: () => {
+                sounds.bgmAudio.loop = true;
+                sounds.bgmAudio.play().catch(e => console.warn("BGM play failed:", e));
+            },
+            stopBGM: () => {
+                sounds.bgmAudio.pause();
+                sounds.bgmAudio.currentTime = 0;
+            }
+        };
+
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 450;
+        const ENTITY_LINE_Y = 340; // Where Trees and Jizos stand
+        const GROUND_Y = 390;      // Where Player stands (lower on screen)
+        const ROAD_TOP_Y = 180;    // Extended grass area starting higher up
+
+        // Game Balance
+        const CAMERA_SCROLL_SPEED = 120; // Pixels per second
+        const PLAYER_SPEED = 250;
+        const GRAVITY = 1200;
+        const JUMP_VELOCITY = -550;
+        const GAME_DURATION = 20; // Seconds until sunrise
+
+        // Item definitions
+        const ITEM_TYPES = {
+            BOMB: { id: 'bomb', icon: '💣', spawnY: GROUND_Y - 30, desc: '炸彈', isGround: true },
+            APPLE: { id: 'apple', icon: '🍎', spawnY: ENTITY_LINE_Y - 210, baseRadius: 15, isTree: true },
+            BALLOON: { id: 'balloon', icon: '🎈', spawnY: GROUND_Y - 230, floatAmplitude: 40, floatSpeed: 3 }
+        };
+        const ITEM_KEYS = Object.keys(ITEM_TYPES);
+
+        // Colors for Day/Night cycle
+        const SKY_COLORS = [
+            { time: 1.0, r: 10, g: 10, b: 25 },   // Deep Night (Start)
+            { time: 0.7, r: 30, g: 20, b: 60 },   // Late Night
+            { time: 0.4, r: 100, g: 50, b: 120 }, // Purple Dawn
+            { time: 0.2, r: 255, g: 140, b: 80 }, // Sunrise Glow
+            { time: 0.0, r: 135, g: 206, b: 250 } // Bright Morning Blue (End)
+        ];
+
+        // --- Internal State ---
+        let lastTime = 0;
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let stateTime = 0;
+        let cameraX = 0;
+        let timeRemaining = GAME_DURATION;
+
+        let keys = { ArrowLeft: false, ArrowRight: false, ArrowUp: false, ArrowDown: false, KeyW: false, KeyS: false, Space: false, Enter: false };
+        let interactHandled = false;
+
+        // Entities
+        let player = {
+            x: 150, // World X
+            y: GROUND_Y - 100,
+            width: 80,
+            height: 120,
+            vx: 0,
+            vy: 0,
+            inventory: null, // Holds an ITEM_TYPES entry
+            history: [], // [{x,y}, {x,y}] for followers to track
+            isBending: false
+        };
+        let cart = { x: 150, y: GROUND_Y - 100 };
+
+        let entities = []; // Items and Jizos
+        let scenery = [];  // Trees with apples
+        let forestScenery = []; // Background forest trees
+        let mountainScenery = []; // Far background mountains
+        let followers = []; // Converted humans
+
+        let spawnTimer = 0;
+        let nextSpawnType = 'JIZO'; // 'JIZO' or 'ITEM'
+        let lastSpawnedJizoItem = null; // To pair them correctly
+
+        // --- DOM Elements ---
+        const uiLayer = document.getElementById('ui-layer');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const timerBar = document.getElementById('timer-bar');
+        const scoreText = document.getElementById('score-text');
+        const inventoryIcon = document.getElementById('inventory-icon');
+        const finalScore = document.getElementById('final-score');
+        const btnStart = document.getElementById('btn-start');
+        const btnRestart = document.getElementById('btn-restart');
+
+        // --- Input Handling ---
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            // Start or Restart game with Space or Enter
+            if ((e.code === 'Space' || e.code === 'Enter') && (gameState === 'START' || gameState === 'GAMEOVER')) {
+                e.preventDefault();
+                startGame();
+                return;
+            }
+
+            // Space handling for Pickup (now using Down arrow for ground items)
+            if ((e.code === 'ArrowDown' || e.code === 'KeyS') && gameState === 'PLAYING') {
+                e.preventDefault();
+                if (!interactHandled) {
+                    handlePlayerPickup();
+                    interactHandled = true;
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            // if (e.code === 'Space') spaceHandled = false;
+            if (e.code === 'ArrowDown' || e.code === 'KeyS') interactHandled = false;
+        });
+
+        btnStart.addEventListener('click', startGame);
+        btnRestart.addEventListener('click', startGame);
+
+        // --- Core Logic ---
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            uiLayer.classList.remove('hidden');
+
+            gameState = 'PLAYING';
+            timeRemaining = GAME_DURATION;
+            cameraX = 0;
+            stateTime = 0;
+            nextSpawnType = 'JIZO';
+            lastSpawnedJizoItem = null;
+
+            player.x = 150;
+            player.y = GROUND_Y - player.height;
+            player.vx = 0;
+            player.vy = 0;
+            player.inventory = null;
+            player.history = [];
+
+            cart.x = 150;
+            cart.y = GROUND_Y - player.height;
+
+            entities = [];
+            scenery = [];
+            forestScenery = [];
+            mountainScenery = [];
+            followers = [];
+            particles = [];
+
+            spawnTimer = 0;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            sounds.stopBGM();
+            sounds.startBGM();
+
+            // Initial generation
+            generateMountains(0, CANVAS_WIDTH * 4);
+            generateForest(0, CANVAS_WIDTH * 3);
+            generateScenery(0, CANVAS_WIDTH * 2);
+        }
+
+        function handlePlayerPickup() {
+            if (player.inventory !== null) return; // Can only hold 1
+
+            // Find nearest item
+            for (let i = 0; i < entities.length; i++) {
+                let e = entities[i];
+                if (e.type === 'ITEM' && !e.pickedUp && e.itemDef.isGround) { // Only pick up ground items manually
+                    // Collision rect around player + leeway
+                    let hitRange = 100;
+                    if (
+                        Math.abs(player.x - e.x) < hitRange &&
+                        Math.abs(player.y + player.height - e.y) < 80 // Distance to feet
+                    ) {
+                        // Pick it up!
+                        e.pickedUp = true;
+                        player.inventory = e.itemDef;
+                        createParticleContext(e.x, e.y, "✨");
+                        if (audioCtx.state === 'suspended') audioCtx.resume();
+                        sounds.pickup();
+                        updateUI();
+                        break;
+                    }
+                }
+            }
+        }
+
+        function handleJizoDelivery() {
+            if (player.inventory === null) return;
+
+            for (let i = 0; i < entities.length; i++) {
+                let e = entities[i];
+                if (e.type === 'JIZO' && !e.converted) {
+                    // Interaction range (Player width 90, Jizo width ~100)
+                    if (Math.abs(player.x - e.x) < 90 && Math.abs(player.y + player.height / 2 - e.y) < 100) {
+                        if (e.desiredItem.id === player.inventory.id) { // Use ID comparison for safety
+                            // Match!
+                            e.converted = true;
+                            // Transform to Follower
+                            if (player.inventory.id === 'bomb') {
+                                createFirework(e.x, e.y);
+                            } else {
+                                createParticleContext(e.x, e.y, "💖");
+                            }
+                            if (audioCtx.state === 'suspended') audioCtx.resume();
+                            sounds.deliver();
+                            transformJizoToFollower(e);
+                            player.inventory = null; // Consume item
+
+                            updateUI();
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function transformJizoToFollower(jizo) {
+            let follower = {
+                id: followers.length,
+                x: jizo.x,
+                y: jizo.y,
+                useAngel: true,
+                visual: ['🧑', '👩', '👱', '👨', '👧', '👦'][Math.floor(Math.random() * 6)],
+                historyIndex: Math.max(0, player.history.length - 1 - (followers.length * 20)) // initial offset
+            };
+            followers.push(follower);
+        }
+
+        // --- Generator ---
+        function generateScenery(startX, endX) {
+            // Background trees now only spawn with apples
+        }
+
+        function generateForest(startX, endX) {
+            const spacing = 140; // Uniform spacing
+            const treeSize = 220; // Larger tree
+            let cx = startX;
+            while (cx < endX) {
+                const treeTypes = ['bgtree01', 'bgtree02', 'bgtree03'];
+                forestScenery.push({
+                    x: cx,
+                    y: 315, // Planted on the grass just above the dirt path (325)
+                    type: treeTypes[Math.floor(Math.random() * treeTypes.length)],
+                    size: treeSize
+                });
+                cx += spacing;
+            }
+        }
+
+        function generateMountains(startX, endX) {
+            let cx = startX;
+            while (cx < endX) {
+                mountainScenery.push({
+                    x: cx + Math.random() * 100,
+                    y: ROAD_TOP_Y - 40,
+                    visual: Math.random() > 0.5 ? '⛰️' : '🏔️',
+                    size: 250 + Math.random() * 150
+                });
+                cx += 250 + Math.random() * 200; // Far mountains are sparse
+            }
+        }
+
+        function spawnEntity(worldX) {
+            if (nextSpawnType === 'JIZO') {
+                // Spawn Jizo
+                const desiredKey = ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)];
+                const itemDef = ITEM_TYPES[desiredKey];
+
+                entities.push({
+                    type: 'JIZO',
+                    x: worldX,
+                    y: ENTITY_LINE_Y,
+                    desiredItem: itemDef,
+                    converted: false
+                });
+
+                // Next cycle will spawn the corresponding item
+                lastSpawnedJizoItem = itemDef;
+                nextSpawnType = 'ITEM';
+            } else {
+                // Spawn Corresponding Item
+                const itemDef = lastSpawnedJizoItem || ITEM_TYPES[ITEM_KEYS[Math.floor(Math.random() * ITEM_KEYS.length)]];
+
+                if (itemDef.isTree) {
+                    scenery.push({ x: worldX, y: ENTITY_LINE_Y, visual: '🌳', size: 320 });
+                }
+
+                entities.push({
+                    type: 'ITEM',
+                    x: worldX,
+                    y: itemDef.spawnY,
+                    itemDef: itemDef,
+                    pickedUp: false,
+                    timeOffset: Math.random() * Math.PI * 2
+                });
+
+                // Next cycle will spawn a new Jizo
+                nextSpawnType = 'JIZO';
+            }
+        }
+
+        // Custom simple particle system
+        let particles = [];
+        function createParticleContext(x, y, emoji) {
+            for (let i = 0; i < 3; i++) {
+                particles.push({
+                    x: x + (Math.random() - 0.5) * 20,
+                    y: y + (Math.random() - 0.5) * 20,
+                    vx: (Math.random() - 0.5) * 100,
+                    vy: -100 - Math.random() * 100,
+                    emoji: emoji,
+                    life: 1.0
+                });
+            }
+        }
+
+        function createFirework(x, y) {
+            // Spawn a rocket particle
+            // Initial speed ~-400 px/s so it rises for ~1 second before apex
+            particles.push({
+                x: x,
+                y: y,
+                vx: (Math.random() - 0.5) * 40,
+                vy: -400 - Math.random() * 100, // -400 ~ -500
+                life: 99, // Rockets live until they explode, NOT time-based
+                type: 'firework-rocket',
+                color: '#fff'
+            });
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            sounds.fireworkLaunch();
+        }
+
+
+        function lerpColor(c1, c2, factor) {
+            const r = Math.round(c1.r + (c2.r - c1.r) * factor);
+            const g = Math.round(c1.g + (c2.g - c1.g) * factor);
+            const b = Math.round(c1.b + (c2.b - c1.b) * factor);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function getSkyColor(timeRatio) {
+            // timeRatio goes from 1.0 (start) to 0.0 (end)
+            for (let i = 0; i < SKY_COLORS.length - 1; i++) {
+                const current = SKY_COLORS[i];
+                const next = SKY_COLORS[i + 1];
+                if (timeRatio <= current.time && timeRatio > next.time) {
+                    // Find interp factor between current and next
+                    const range = current.time - next.time;
+                    const factor = 1 - ((timeRatio - next.time) / range);
+                    return lerpColor(current, next, factor);
+                }
+            }
+            return `rgb(${SKY_COLORS[SKY_COLORS.length - 1].r},${SKY_COLORS[SKY_COLORS.length - 1].g},${SKY_COLORS[SKY_COLORS.length - 1].b})`;
+        }
+
+        let outroTimer = 0;
+        const OUTRO_RUN_SPEED = 600; // px/s – fast sprint to the right
+
+        function updateOutro(dt) {
+            outroTimer += dt;
+            stateTime += dt;
+
+            // Move player rapidly to the right
+            player.x += OUTRO_RUN_SPEED * dt;
+            player.isBending = false;
+
+            // Record history so followers and cart trail along
+            player.history.push({ x: player.x, y: player.y });
+            const maxHistory = (followers.length + 2) * 30;
+            if (player.history.length > maxHistory) player.history.shift();
+
+            // Update followers (same trail logic as PLAYING)
+            for (let i = 0; i < followers.length; i++) {
+                let f = followers[i];
+                let gap = 15;
+                let cartGap = 12;
+                let targetIndex = Math.max(0, player.history.length - 1 - cartGap - ((i + 1) * gap));
+                if (player.history[targetIndex]) {
+                    f.x += (player.history[targetIndex].x - f.x) * 10 * dt;
+                    f.y += (player.history[targetIndex].y - f.y) * 15 * dt;
+                }
+            }
+
+            // Update Cart
+            let cartTargetIndex = Math.max(0, player.history.length - 1 - 10);
+            if (player.history[cartTargetIndex]) {
+                cart.x += (player.history[cartTargetIndex].x - cart.x) * 12 * dt;
+                cart.y += (GROUND_Y - player.height - cart.y) * 15 * dt;
+            }
+
+            // Once the last follower (or cart if no followers) leaves the screen, show game over
+            const lastX = followers.length > 0
+                ? followers[followers.length - 1].x
+                : cart.x;
+            if (lastX > cameraX + CANVAS_WIDTH + 100) {
+                gameState = 'GAMEOVER';
+                sounds.stopBGM();
+                gameOverScreen.classList.remove('hidden');
+                finalScore.innerText = followers.length;
+
+                // Restore 3 celebratory fireworks for the ending image
+                for (let i = 0; i < 3; i++) {
+                    const fx = cameraX + 150 + Math.random() * (CANVAS_WIDTH - 300);
+                    setTimeout(() => {
+                        if (gameState === 'GAMEOVER') {
+                            createFirework(fx, GROUND_Y);
+                        }
+                    }, i * 400); // Slightly more staggered
+                }
+            }
+        }
+
+        function update(dt) {
+            // Always update particles so fireworks animate even when game is technically paused/over
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx * dt;
+                p.y += p.vy * dt;
+
+                if (p.type === 'firework-rocket') {
+                    p.vy += 400 * dt;
+                    if (p.vy >= 0) {
+                        p.life = 0;
+                        if (audioCtx.state === 'suspended') audioCtx.resume();
+                        sounds.fireworkExplode();
+
+                        const hue = Math.floor(Math.random() * 360);
+                        const particleCount = 40;
+                        for (let j = 0; j < particleCount; j++) {
+                            const angle = Math.random() * 2 * Math.PI;
+                            const speed = 120 + Math.random() * 240;
+                            particles.push({
+                                x: p.x,
+                                y: p.y,
+                                vx: Math.cos(angle) * speed,
+                                vy: Math.sin(angle) * speed,
+                                life: 1.0,
+                                type: 'firework-spark',
+                                color: `hsl(${hue}, 100%, 65%)`
+                            });
+                        }
+                    }
+                } else if (p.type === 'firework-spark') {
+                    p.vy += 200 * dt;
+                    p.vx *= 0.99;
+                    p.life -= dt * 1.3;
+                } else {
+                    p.life -= dt * 2.0;
+                }
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            if (gameState === 'OUTRO') {
+                updateOutro(dt);
+                return;
+            }
+            if (gameState !== 'PLAYING') return;
+
+            stateTime += dt;
+            timeRemaining -= dt;
+
+            if (timeRemaining <= 0) {
+                timeRemaining = 0;
+                // Wait for player to land before starting outro
+                const isGrounded = player.y >= GROUND_Y - player.height;
+                if (isGrounded) {
+                    gameState = 'OUTRO';
+                    outroTimer = 0;
+                    player.vy = 0; // Reset vertical velocity for running animation
+                    player.y = GROUND_Y - player.height; // Ensure target grounding
+                    uiLayer.classList.add('hidden');
+                    return;
+                }
+            } else {
+                // Auto Scroll Camera - only while playing
+                cameraX += CAMERA_SCROLL_SPEED * dt;
+            }
+
+            // Update Timer UI
+            const ratio = Math.max(0, timeRemaining / GAME_DURATION);
+            timerBar.style.transform = `scaleX(${ratio})`;
+
+            // Entity Spawning Manager
+            spawnTimer -= dt;
+            if (spawnTimer <= 0) {
+                // Spawn something just off screen right
+                spawnEntity(cameraX + CANVAS_WIDTH + 100);
+                spawnTimer = 1.0 + Math.random() * 2.0; // Every 1.0 to 3.0 seconds - Balanced frequency
+            }
+
+            // Periodically spawn forest
+            let lastForestX = forestScenery.length > 0 ? forestScenery[forestScenery.length - 1].x : 0;
+            if (cameraX * 0.75 + CANVAS_WIDTH > lastForestX) {
+                generateForest(lastForestX + 120, lastForestX + CANVAS_WIDTH);
+            }
+
+            // Cleanup forest
+            for (let i = forestScenery.length - 1; i >= 0; i--) {
+                if (forestScenery[i].x < cameraX * 0.75 - 200) forestScenery.splice(i, 1);
+            }
+
+            // Periodically spawn mountains
+            let lastMountainX = mountainScenery.length > 0 ? mountainScenery[mountainScenery.length - 1].x : 0;
+            if (cameraX * 0.2 + CANVAS_WIDTH > lastMountainX) {
+                generateMountains(lastMountainX + 10, lastMountainX + CANVAS_WIDTH * 2);
+            }
+
+            // Cleanup mountains
+            for (let i = mountainScenery.length - 1; i >= 0; i--) {
+                if (mountainScenery[i].x < cameraX * 0.2 - 500) mountainScenery.splice(i, 1);
+            }
+
+            // Jump
+            const isGrounded = player.y >= GROUND_Y - player.height;
+            if (isGrounded) {
+                player.y = GROUND_Y - player.height;
+                player.vy = 0;
+                if ((keys.ArrowUp || keys.KeyW) && timeRemaining > 0) {
+                    player.vy = JUMP_VELOCITY;
+                }
+            } else {
+                player.vy += GRAVITY * dt;
+            }
+            player.y += player.vy * dt;
+
+            // Bending logic
+            player.isBending = (keys.ArrowDown || keys.KeyS) && isGrounded;
+
+            // --- Player Logic ---
+            let moveIntent = 0;
+            if (!player.isBending && timeRemaining > 0) {
+                if (keys.ArrowLeft) moveIntent -= 1;
+                if (keys.ArrowRight) moveIntent += 1;
+            }
+
+            // Player automatically moves forward at CAMERA_SCROLL_SPEED. Move intents modify this.
+            const currentScroll = timeRemaining > 0 ? CAMERA_SCROLL_SPEED : 0;
+            player.x += (currentScroll + moveIntent * PLAYER_SPEED) * dt;
+
+            // Left bound: pushed by camera
+            if (player.x < cameraX + 30) {
+                player.x = cameraX + 30;
+            }
+            // Right bound: stop at right edge
+            if (player.x > cameraX + CANVAS_WIDTH - 50) {
+                player.x = cameraX + CANVAS_WIDTH - 50;
+            }
+
+            // Record History (for followers)
+            // To save memory, only record if moved a certain distance since last record
+            if (player.history.length === 0 ||
+                Math.hypot(player.x - player.history[player.history.length - 1].x, player.y - player.history[player.history.length - 1].y) > 5) {
+                player.history.push({ x: player.x, y: player.y });
+                // Prune old history (Keep enough for N followers, say spacing = 20 entries)
+                const maxHistory = (followers.length + 2) * 20;
+                if (player.history.length > maxHistory) {
+                    player.history.shift();
+                    // Adjust follower indices
+                    for (let f of followers) f.historyIndex--;
+                }
+            }
+
+            handleJizoDelivery(); // Check automatic delivery EVERY frame
+
+            // Auto Pickup for Air items (Apple, Balloon)
+            if (player.inventory === null) {
+                let hitRange = 100;
+                for (let e of entities) {
+                    if (e.type === 'ITEM' && !e.pickedUp && !e.itemDef.isGround) {
+                        if (
+                            Math.abs(player.x - e.x) < 80 &&
+                            Math.abs((player.y + player.height / 2) - e.y) < 110
+                        ) {
+                            e.pickedUp = true;
+                            player.inventory = e.itemDef;
+                            createParticleContext(e.x, e.y, "✨");
+                            if (audioCtx.state === 'suspended') audioCtx.resume();
+                            sounds.pickup();
+                            updateUI();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Update Entities (Balloons animate)
+            for (let i = entities.length - 1; i >= 0; i--) {
+                let e = entities[i];
+
+                if (e.type === 'ITEM' && !e.pickedUp && e.itemDef.id === 'balloon') {
+                    // Bob up and down
+                    e.y = e.itemDef.spawnY + Math.sin(stateTime * e.itemDef.floatSpeed + e.timeOffset) * e.itemDef.floatAmplitude;
+                }
+
+                // Cleanup if way behind camera
+                if (e.x < cameraX - 200 || e.pickedUp || (e.type === 'JIZO' && e.converted)) {
+                    entities.splice(i, 1);
+                }
+            }
+
+            // Cleanup scenery
+            for (let i = scenery.length - 1; i >= 0; i--) {
+                if (scenery[i].x < cameraX - 300) scenery.splice(i, 1);
+            }
+
+            // Update Followers (Shifted back to make room for cart)
+            for (let i = 0; i < followers.length; i++) {
+                let f = followers[i];
+                let gap = 15;
+                let cartGap = 12; // Room for the cart
+                let targetIndex = player.history.length - 1 - cartGap - ((i + 1) * gap);
+                targetIndex = Math.max(0, targetIndex);
+
+                if (player.history[targetIndex]) {
+                    let tx = player.history[targetIndex].x;
+                    let ty = player.history[targetIndex].y;
+                    f.x += (tx - f.x) * 10 * dt;
+                    f.y += (ty - f.y) * 15 * dt;
+                }
+            }
+
+            // Update Cart (Smooth movement)
+            let cartIndexOffset = 10;
+            let cartTargetIndex = Math.max(0, player.history.length - 1 - cartIndexOffset);
+            if (player.history[cartTargetIndex]) {
+                let tx = player.history[cartTargetIndex].x;
+                // Keep cart at ground Y (stable)
+                let ty = GROUND_Y - player.height;
+                cart.x += (tx - cart.x) * 12 * dt;
+                cart.y += (ty - cart.y) * 15 * dt;
+            }
+        }
+
+        function updateUI() {
+            // scoreText.innerText = followers.length; // Removed as requested
+            if (player.inventory) {
+                // Determine if we have an image for this item
+                const imgPath = IMG_PATHS[player.inventory.id];
+                if (imgPath) {
+                    inventoryIcon.innerHTML = `<img src="${imgPath}" style="width:30px;height:30px;vertical-align:middle;">`;
+                } else {
+                    inventoryIcon.innerText = player.inventory.icon;
+                }
+            } else {
+                inventoryIcon.innerHTML = "";
+            }
+        }
+
+        function drawPlayer(ctx, p, stateTime) {
+            ctx.save();
+            let isRunning = ((gameState === 'PLAYING' || gameState === 'OUTRO') && p.vy === 0 && !p.isBending);
+            let isJumping = (p.vy !== 0);
+
+            // Compute physics-based transforms for the single image
+            let px = p.x + p.width / 2;
+            let py = p.y + p.height; // pivot at feet
+
+            ctx.translate(px, py);
+
+            let scale = 1;
+            let rotation = 0;
+            let dropY = 0;
+
+            if (p.isBending) {
+                // Remove procedural rotation/scale, just handle drop if needed
+                dropY = 0;
+                rotation = 0;
+                scale = 1.0;
+            } else if (isRunning) {
+                let walkCycle = stateTime * 15;
+                dropY = Math.abs(Math.sin(walkCycle)) * -8;
+                rotation = 0;
+                scale = 1.0; // Uniform scale
+            } else if (isJumping) {
+                scale = 1.05; // Uniform stretch
+                rotation = 0.1;
+            }
+
+            ctx.translate(0, dropY);
+            ctx.scale(scale, scale); // Force uniform scale
+            ctx.rotate(rotation);
+
+            if (images.player01 && images.player01.complete && images.player01.naturalWidth > 0) {
+                // Determine which frame to draw
+                let activeImg = images.player01;
+                if (p.isBending) {
+                    // Cycle between bendover01 and bendover02
+                    let frame = Math.floor(stateTime * 8) % 2;
+                    if (frame === 0 && images.bendover01 && images.bendover01.complete) {
+                        activeImg = images.bendover01;
+                    } else if (frame === 1 && images.bendover02 && images.bendover02.complete) {
+                        activeImg = images.bendover02;
+                    } else {
+                        activeImg = images.bendover01; // Fallback
+                    }
+                } else if (isRunning) {
+                    // Toggle based on time
+                    let frame = Math.floor(stateTime * 8) % 2;
+                    if (frame === 1 && images.player02 && images.player02.complete) {
+                        activeImg = images.player02;
+                    }
+                }
+
+                // Calculate dynamic width based on aspect ratio
+                let h = 150;
+                if (p.isBending) h = 130; // Bending over is slightly shorter
+                let aspect = activeImg.naturalWidth / activeImg.naturalHeight;
+                let w = h * aspect;
+
+                // Draw active frame
+                ctx.drawImage(activeImg, -w / 2, -h, w, h);
+            } else {
+                // Fallback placeholder block if image missing
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(-15, -40, 30, 40);
+            }
+            ctx.restore();
+        }
+
+        function draw() {
+            // If Game Over, draw the ending image and particles on top
+            const timeRatio = Math.max(0, timeRemaining / GAME_DURATION);
+
+            if (gameState === 'GAMEOVER') {
+                if (images.ending && images.ending.complete) {
+                    ctx.drawImage(images.ending, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                } else {
+                    ctx.fillStyle = '#111';
+                    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+                }
+
+                // Draw Particles for fireworks
+                ctx.save();
+                ctx.translate(-cameraX, 0);
+                for (let p of particles) {
+                    ctx.save();
+                    ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+                    if (p.type === 'firework-rocket') {
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else if (p.type === 'firework-spark') {
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+                ctx.restore();
+                return;
+            }
+
+            // 1. Draw Sky (Simple color transition)
+            ctx.fillStyle = getSkyColor(timeRatio);
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw Rising Sun (appears as time ratio approaches 0)
+            if (timeRatio < 0.4) {
+                const sunOpacity = Math.min(1, (0.4 - timeRatio) / 0.3);
+                const sunY = 60 + (timeRatio / 0.4) * 150; // Rises from lower down
+                ctx.save();
+                ctx.globalAlpha = sunOpacity;
+
+                // Outer Glow
+                let gradient = ctx.createRadialGradient(CANVAS_WIDTH - 120, sunY, 10, CANVAS_WIDTH - 120, sunY, 80);
+                gradient.addColorStop(0, "rgba(255, 255, 220, 0.8)");
+                gradient.addColorStop(0.5, "rgba(255, 200, 50, 0.3)");
+                gradient.addColorStop(1, "rgba(255, 100, 0, 0)");
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(CANVAS_WIDTH - 120, sunY, 80, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Sun Core
+                ctx.fillStyle = "#fff9bd";
+                ctx.beginPath();
+                ctx.arc(CANVAS_WIDTH - 120, sunY, 35, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 2. Base Ground (Grass) - Drawn at 100% speed to fill the background
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+            ctx.fillStyle = '#a8d18d'; // Fresh green grass
+            ctx.fillRect(cameraX, ROAD_TOP_Y, CANVAS_WIDTH, CANVAS_HEIGHT - ROAD_TOP_Y);
+            ctx.restore();
+
+            // 3. Mountain Layer (Deep Parallax)
+            ctx.save();
+            ctx.translate(-cameraX * 0.2, 0);
+            for (let m of mountainScenery) {
+                ctx.font = `${m.size}px Arial`;
+                ctx.globalAlpha = 0.5;
+                ctx.fillText(m.visual, m.x, m.y);
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.restore();
+
+            // 4. Forest Layer (Mid Parallax)
+            ctx.save();
+            ctx.translate(-cameraX * 0.75, 0);
+            for (let f of forestScenery) {
+                let img = images[f.type];
+                if (img && img.complete) {
+                    let h = f.size;
+                    let aspect = img.naturalWidth / img.naturalHeight;
+                    let w = h * aspect;
+                    ctx.drawImage(img, f.x - w / 2, f.y - h, w, h);
+                } else {
+                    ctx.font = `${f.size}px Arial`;
+                    ctx.fillText('🌳', f.x, f.y);
+                }
+            }
+            ctx.globalAlpha = 1.0;
+            ctx.restore();
+
+            // 5. Camera Transform for Foreground (Dirt Path, Entities, Player)
+            ctx.save();
+            ctx.translate(-cameraX, 0);
+
+            // Draw Dirt Path (Where player and Jizo stand)
+            ctx.fillStyle = '#e3c6a4';
+            let pathTop = ENTITY_LINE_Y - 15;
+            let pathHeight = (GROUND_Y - ENTITY_LINE_Y) + 35;
+            ctx.fillRect(cameraX, pathTop, CANVAS_WIDTH, pathHeight);
+
+            // Subtle path edge (Grass bits)
+            ctx.fillStyle = '#8db574';
+            for (let rx = Math.floor(cameraX / 50) * 50; rx < cameraX + CANVAS_WIDTH; rx += 50) {
+                ctx.fillRect(rx, pathTop - 2, 10, 4);
+                ctx.fillRect(rx + 25, pathTop + pathHeight - 2, 15, 4);
+            }
+
+            // 3. Draw Background Scenery (Trees) - Now on top of road
+            for (let s of scenery) {
+                if (images.tree && images.tree.complete) {
+                    let h = s.size;
+                    let aspect = images.tree.naturalWidth / images.tree.naturalHeight;
+                    let w = h * aspect;
+                    ctx.drawImage(images.tree, s.x - w / 2, s.y - h, w, h);
+                } else {
+                    ctx.font = `${s.size}px Arial`;
+                    ctx.fillText(s.visual, s.x, s.y);
+                }
+            }
+
+            // 4. Draw Entities (Items and Jizos)
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            for (let e of entities) { // Added loop for entities
+                if (e.type === 'ITEM' && !e.pickedUp) {
+                    let img = images[e.itemDef.id];
+                    if (img && img.complete) {
+                        let h = 65; // Larger items
+                        let aspect = img.naturalWidth / img.naturalHeight;
+                        let w = h * aspect;
+                        ctx.drawImage(img, e.x - w / 2, e.y - h / 2, w, h);
+                    } else {
+                        ctx.fillText(e.itemDef.icon, e.x, e.y + 10);
+                    }
+                } else if (e.type === 'JIZO' && !e.converted) {
+                    // Jizo Statue
+                    let img = images.jizo;
+                    if (img && img.complete) {
+                        let h = 120; // Larger Jizo
+                        let aspect = img.naturalWidth / img.naturalHeight;
+                        let w = h * aspect;
+                        ctx.drawImage(img, e.x - w / 2, e.y - h, w, h);
+                    } else {
+                        ctx.fillText('🗿', e.x, e.y - 5);
+                    }
+                    // Optimized Thought Bubble (Higher to avoid overlap)
+                    let bubbleX = e.x + 50;
+                    let bubbleY = e.y - 190;
+                    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+                    ctx.beginPath();
+                    // Larger ellipse
+                    ctx.ellipse(bubbleX, bubbleY, 60, 45, 0, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Connection dots (Moved up)
+                    ctx.beginPath();
+                    ctx.arc(e.x + 30, e.y - 145, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(e.x + 15, e.y - 130, 6, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    // Render larger image inside bubble
+                    let dImg = images[e.desiredItem.id];
+                    if (dImg && dImg.complete) {
+                        let h = 50;
+                        let aspect = dImg.naturalWidth / dImg.naturalHeight;
+                        let w = h * aspect;
+                        ctx.drawImage(dImg, bubbleX - w / 2, bubbleY - h / 2, w, h);
+                    } else {
+                        ctx.font = '35px Arial';
+                        ctx.fillText(e.desiredItem.icon, bubbleX, bubbleY + 12);
+                    }
+                    ctx.font = '40px Arial'; // Restore
+                }
+            }
+
+            // 4.5 Draw Cart (following player)
+            drawCart(ctx, cart.x, cart.y + player.height - 10, player.inventory);
+
+            // 5. Draw Followers
+            for (let i = 0; i < followers.length; i++) {
+                let f = followers[i];
+                // Add floating effect
+                let floatOffset = Math.sin(stateTime * 3 + i) * 15;
+
+                if (images.angel && images.angel.complete) {
+                    let h = 120; // Even larger angel
+                    let aspect = images.angel.naturalWidth / images.angel.naturalHeight;
+                    let w = h * aspect;
+                    ctx.drawImage(images.angel, f.x - w / 2, f.y + player.height - h + floatOffset, w, h);
+                } else {
+                    ctx.font = '60px Arial';
+                    ctx.fillText(f.visual, f.x, f.y + player.height + floatOffset);
+                }
+            }
+
+            // 6. Draw Player
+            drawPlayer(ctx, player, stateTime);
+
+            // 7. Draw Particles
+            for (let p of particles) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+
+                if (p.type === 'firework-rocket') {
+                    ctx.fillStyle = '#fff';
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                } else if (p.type === 'firework-spark') {
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                } else {
+                    ctx.font = '24px Arial';
+                    ctx.fillText(p.emoji, p.x, p.y);
+                }
+                ctx.restore();
+            }
+
+            ctx.restore(); // End Camera Transform
+
+            // Draw Sunrise overlay effect (glare)
+            if (gameState === 'PLAYING' && timeRatio < 0.2) {
+                // As time gets close to 0, glare increases
+                let glareAlpha = (0.2 - timeRatio) / 0.2 * 0.4;
+                ctx.fillStyle = `rgba(255, 200, 100, ${glareAlpha})`;
+                ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            }
+        }
+
+        function drawCart(ctx, x, y, item) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // Draw connecting rope (to player)
+            ctx.strokeStyle = '#5d4037';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(25, -15);
+            ctx.stroke();
+
+            // Cart Body (Rustic Wood)
+            ctx.fillStyle = '#795548'; // Wood color
+            ctx.beginPath();
+            ctx.roundRect(-30, -25, 60, 20, 4);
+            ctx.fill();
+
+            // Texture/Details
+            ctx.strokeStyle = '#3e2723';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-25, -20, 50, 10);
+
+            // Iron Wheels
+            ctx.fillStyle = '#212121';
+            ctx.beginPath();
+            ctx.arc(-18, -5, 8, 0, Math.PI * 2);
+            ctx.arc(18, -5, 8, 0, Math.PI * 2);
+            ctx.fill();
+            // Wheel hub
+            ctx.fillStyle = '#9e9e9e';
+            ctx.beginPath();
+            ctx.arc(-18, -5, 2, 0, Math.PI * 2);
+            ctx.arc(18, -5, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Item Inside
+            if (item) {
+                let img = images[item.id];
+                if (img && img.complete) {
+                    let h = 45;
+                    let aspect = img.naturalWidth / img.naturalHeight;
+                    let w = h * aspect;
+                    ctx.drawImage(img, -w / 2, -h - 20, w, h);
+                } else {
+                    ctx.font = '30px Arial';
+                    ctx.fillText(item.icon, 0, -20);
+                }
+            }
+            ctx.restore();
+        }
+
+        // --- Main Game Loop ---
+        function loop(timestamp) {
+            let dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            // Cap dt for lag spikes
+            if (dt > 0.1) dt = 0.016;
+
+            update(dt);
+            draw();
+
+            requestAnimationFrame(loop);
+        }
+
+        // Init Game Loop
+        requestAnimationFrame((time) => {
+            lastTime = time;
+            loop(time);
+        });
+
+    </script>
+</body>
+
+</html>
